@@ -17,8 +17,4 @@ yarn dev
 
 #### This is the loom video demo
 
-https://www.loom.com/share/dac80efea2774468871a304749be2f1e
-
-### Todo
-- [ ] Write the tests to ensure that pagination is working properly
-- [ ] Using [Framer motion](https://www.framer.com/motion/) for cool animations. I can do it with other UI libraries like material UI but since I decided to use [mantine](https://mantine.dev/) documentation is not clear enough but I will challenge myself to do it
+https://www.loom.com/share/9bbc61010a444b6e9ad23fc761612e4c
