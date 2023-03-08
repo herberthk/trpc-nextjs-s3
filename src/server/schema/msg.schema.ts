@@ -1,9 +1,13 @@
 import { boolean, object, string, TypeOf } from "zod";
+import { ImageType } from "~/utils/constants";
 
 const addMsgParams = object({
   message: string(),
   hasImage: boolean(),
-  image: string().nullish(),
+  imageType: ImageType,
+}).partial({
+  hasImage: true,
+  imageType: true,
 });
 
 const deleteMsgParams = object({

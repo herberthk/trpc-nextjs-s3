@@ -30,7 +30,7 @@ const Messages: FC<Props> = ({ triggerScroll }) => {
       },
     }
   );
-  if (messageQuery.data === undefined) {
+  if (messageQuery.isLoading) {
     return <Loading />;
   }
   if (!messageQuery.data?.pages.map((p) => p?.edges).length) {

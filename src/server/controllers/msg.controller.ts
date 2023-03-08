@@ -2,7 +2,6 @@ import Chat from "../models/Chat";
 import { AddMsgParams, DeleteMsgParams } from "../schema/msg.schema";
 import AWS from "aws-sdk";
 import { randomUUID } from "crypto";
-import axios from "axios";
 
 const S3 = new AWS.S3({
   region: "eu-west-2",
@@ -27,26 +26,15 @@ type MsgParams = {
   cursor?: string | null;
 };
 
-// type ChatResponse = {
-//   edges: MsgResponse;
-//   pageInfo: {
-//     hasNext: boolean;
-//     cursor: string | null;
-//   };
-// };
-
 // Get signed url and key to upload to S3
-const getSignedUrl = async (file?: string | null): Promise<ReturnType> => {
-  // Getting the file type, ie: jpeg, png or gif
-  const type = file?.split(";")[0].split("/")[1];
+const getSignedUrl = async (type?: string): Promise<ReturnType> => {
   const Key = `${randomUUID()}.${type}`;
 
   const s3Params = {
     Bucket: process.env.BUCKET_NAME,
     Key,
     Expires: 108000,
-    ContentEncoding: "base64",
-    ContentType: `image/${type}}`,
+    ContentType: type,
   };
 
   const uploadUrl = await S3.getSignedUrl("putObject", s3Params);
@@ -54,34 +42,6 @@ const getSignedUrl = async (file?: string | null): Promise<ReturnType> => {
     Key,
     uploadUrl,
   };
-};
-
-// Upload to s3 using signed url we got above
-const uploadToS3 = async (url: string, file?: string | null) => {
-  if (!file) {
-    return;
-  }
-  try {
-    // Getting the file type, ie: jpeg, png or gif
-    const type = file?.split(";")[0].split("/")[1];
-
-    const buffer = Buffer.from(
-      file?.replace(/^data:image\/\w+;base64,/, ""),
-      "base64"
-    );
-
-    const result = await axios.put(url, buffer, {
-      headers: {
-        "Content-Type": `image/${type}`,
-        "Content-Encoding": "base64",
-      },
-    });
-
-    return result;
-  } catch (error) {
-    console.log("Error uploading to S3", error);
-    // throw new Error(e);
-  }
 };
 
 //Encode cursor to base64 to make it secure
@@ -155,7 +115,7 @@ export const getMessages = async ({
 };
 
 export const addMessage = async ({
-  input: { image, hasImage, message },
+  input: { imageType, hasImage, message },
 }: {
   input: AddMsgParams;
 }) => {
@@ -174,9 +134,7 @@ export const addMessage = async ({
   } else {
     try {
       //Get Upload url and key to to upload to S3
-      const { Key, uploadUrl } = await getSignedUrl(image);
-      // Upload image to S3
-      await uploadToS3(uploadUrl, image);
+      const { Key, uploadUrl } = await getSignedUrl(imageType);
 
       const chat = Chat.build({
         message,
@@ -187,7 +145,7 @@ export const addMessage = async ({
 
       return {
         success: true,
-        message: "Post created",
+        uploadUrl,
       };
     } catch (error) {
       console.error("Error adding message", error);

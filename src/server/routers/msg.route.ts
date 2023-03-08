@@ -5,6 +5,7 @@ import {
   getMessages,
 } from "../controllers/msg.controller";
 import { boolean, string, z } from "zod";
+import { ImageType } from "~/utils/constants";
 
 const msgRouter = t.router({
   list: t.procedure
@@ -16,11 +17,16 @@ const msgRouter = t.router({
     .query(({ input }) => getMessages({ input })),
   add: t.procedure
     .input(
-      z.object({
-        message: string(),
-        hasImage: boolean(),
-        image: z.string().nullish(),
-      })
+      z
+        .object({
+          message: string(),
+          hasImage: boolean(),
+          imageType: ImageType,
+        })
+        .partial({
+          hasImage: true,
+          imageType: true,
+        })
     )
     .mutation(({ input }) => addMessage({ input })),
   delete: t.procedure

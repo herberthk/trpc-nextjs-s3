@@ -13,13 +13,14 @@ import {
 import { AppRouter } from "~/server/routers/_app";
 import { MsgResponse } from "~/server/controllers/msg.controller";
 import { v4 as uuidv4 } from "uuid";
-import { decodeBase64, getBase64 } from "~/utils/helpers";
 import { toast } from "react-toastify";
 import Preview from "./Preview";
+import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE } from "~/utils/constants";
+import { uploadToS3 } from "~/utils/helpers";
 
 const ChatContainer = () => {
   const [message, setMessage] = useState("");
-  const [encodedImage, setEncodedImage] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
   const [hasImage, setHasImage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -35,22 +36,23 @@ const ChatContainer = () => {
 
       // Optimistically update to the new value
       let updatedMessage: MsgResponse;
-      if (!newMessage.image) {
+      // Image sent along the message
+      if (!newMessage.hasImage) {
         updatedMessage = {
           message: newMessage.message,
           pd: new Date().toISOString(),
           id: uuidv4(),
         };
       } else {
-        // convert base4 image to Blob
-        const decordedImage = await decodeBase64(newMessage.image);
-        // we get a url to the image in browser
-        const imageUrl = URL.createObjectURL(decordedImage);
+        if (!photo) {
+          return;
+        }
+        // Image sent along with the message
         updatedMessage = {
           message: newMessage.message,
           pd: new Date().toISOString(),
           id: uuidv4(),
-          url: imageUrl,
+          url: URL.createObjectURL(photo),
         };
       }
       // There is currently no clear fix for this bug. It happens when setting a callback function to setData()
@@ -63,8 +65,11 @@ const ChatContainer = () => {
         return [...old.edges, updatedMessage];
       });
 
-      // Return a context object with the snapshotted value
+      // Return a context object with the snapshot value
       return { previousMessages };
+    },
+    onSuccess: async (data): Promise<void> => {
+      await uploadToS3(photo, photo?.type, data?.uploadUrl);
     },
     // If the mutation fails,
     // use the context returned from onMutate to roll back
@@ -74,6 +79,8 @@ const ChatContainer = () => {
 
     // Always refetch after error or success:
     onSettled: async () => {
+      // Remove from the rest of functions
+      setPhoto(null);
       await utils.msg.list.invalidate();
     },
   });
@@ -85,7 +92,7 @@ const ChatContainer = () => {
     const input: Input = {
       hasImage,
       message,
-      image: encodedImage,
+      imageType: photo?.type,
     };
     setLoading(true);
     setSubmitted(true);
@@ -95,7 +102,7 @@ const ChatContainer = () => {
       setPreviewSrc("");
       setMessage("");
       setHasImage(false);
-      setEncodedImage(null);
+      // setEncodedImage(null);
       toast.success("Success", {
         closeOnClick: true,
         progress: undefined,
@@ -110,7 +117,6 @@ const ChatContainer = () => {
       setLoading(false);
       setMessage("");
       setHasImage(false);
-      setEncodedImage(null);
       setSubmitted(false);
       setScroll(true);
     }
@@ -128,19 +134,13 @@ const ChatContainer = () => {
     if (!e.target.files || e.target.files.length === 0) {
       return;
     }
-    const acceptableTypes = [
-      "image/png",
-      "image/jpeg",
-      "image/gif",
-      "image/jpg",
-      "image/webp",
-    ];
-    if (!acceptableTypes.includes(e.target.files[0].type)) {
+
+    if (!ACCEPTED_IMAGE_TYPES.includes(e.target.files[0].type)) {
       toast.error("upload valid image", {
         closeOnClick: true,
         progress: undefined,
       });
-      toast.info("Uploaded image should be of type png, jpg, gif or webp", {
+      toast.info("Uploaded image should be of type png, jpg, gif or", {
         closeOnClick: true,
         progress: undefined,
       });
@@ -148,7 +148,7 @@ const ChatContainer = () => {
       return;
     }
     // File size should not exceed 500kb
-    if (e.target.files[0].size > 500000) {
+    if (e.target.files[0].size > MAX_FILE_SIZE) {
       toast.error("Uploaded image is too large", {
         closeOnClick: true,
         progress: undefined,
@@ -160,20 +160,23 @@ const ChatContainer = () => {
       e.target.value = "";
       return;
     }
-
+    // We have the image uploaded with message
     setHasImage(true);
-    // Encode Image to base64 string
-    // The FileReader from getBase64() cannot return string it returns unknown thats why we cast it to string to match encoded image type
-    const data = (await getBase64(e.target.files[0])) as string;
-    setEncodedImage(data);
+    // We set the uploaded image/photo to be available to other functions
+    setPhoto(e.target.files[0]);
+
+    // We get the image to preview
     const src = URL.createObjectURL(e.target.files[0]);
     setPreviewSrc(src);
     e.target.value = "";
   }, []);
 
   const removePreviewImage = useCallback(() => {
+    // Remove preview image
     setPreviewSrc("");
-    setEncodedImage(null);
+    // Remove from the rest of functions
+    setPhoto(null);
+    // Send without image
     setHasImage(false);
   }, []);
 
